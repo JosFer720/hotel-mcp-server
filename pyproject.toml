@@ -1,0 +1,25 @@
+[project]
+name = "hotel-mcp-server"
+version = "0.1.0"
+description = "MCP server for internal hotel operations: room assignment, overbooking risk and housekeeping scheduling"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+seed = ["faker>=30.0"]
+dev = ["pytest>=8.0", "faker>=30.0"]
+
+[project.scripts]
+hotel-mcp = "hotel_mcp.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hotel_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
