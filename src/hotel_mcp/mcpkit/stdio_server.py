@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import threading
 from typing import Any
 
 from .jsonrpc import (
@@ -37,11 +38,11 @@ class StdioServer:
 
     async def serve(self) -> None:
         self._guard_stdout()
-        reader = await self._stdin_reader()
+        queue = self._start_stdin_reader()
 
         while True:
-            line = await reader.readline()
-            if not line:
+            line = await queue.get()
+            if line is None:
                 break  # stdin closed: the client is shutting us down.
             text = line.decode("utf-8", errors="replace").strip()
             if not text:
@@ -109,10 +110,19 @@ class StdioServer:
             self._out.flush()
 
     @staticmethod
-    async def _stdin_reader() -> asyncio.StreamReader:
+    def _start_stdin_reader() -> "asyncio.Queue[bytes | None]":
+        """Read stdin on a background thread and forward lines through a queue."""
         loop = asyncio.get_running_loop()
-        reader = asyncio.StreamReader(limit=8 * 1024 * 1024)
-        await loop.connect_read_pipe(
-            lambda: asyncio.StreamReaderProtocol(reader), sys.stdin
-        )
-        return reader
+        queue: "asyncio.Queue[bytes | None]" = asyncio.Queue()
+
+        def _read_loop() -> None:
+            stdin = sys.stdin.buffer
+            while True:
+                line = stdin.readline()
+                if not line:
+                    loop.call_soon_threadsafe(queue.put_nowait, None)
+                    return
+                loop.call_soon_threadsafe(queue.put_nowait, line)
+
+        threading.Thread(target=_read_loop, daemon=True, name="stdin-reader").start()
+        return queue
